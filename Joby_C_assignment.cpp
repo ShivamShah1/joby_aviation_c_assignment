@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/17/25
-Time: 7:56 PM
+Time: 8:20 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -29,6 +29,7 @@ then set its flight again. We will try to run this scenario for 3 hours.
 */
 
 #include <iostream>
+#include <random>
 
 using namespace std;
 
@@ -36,17 +37,17 @@ using namespace std;
 class Vehicle {
     public:
         string company;
-        double cruiseSpeed;
-        double batteryCapacity;
-        double timeToCharge;
-        double energyPerMile;
-        int passengerCount;
-        double faultProbability;
+        int cruise_speed;
+        double battery_capacity;
+        double time_to_charge;
+        double energy_per_mile;
+        int passenger_count;
+        double fault_probability;
         
         /* creating a constructor */
-        Vehicle(string comp, double speed, double capacity, double charge, double energy, int passengers, double fault)
-            : company(comp), cruiseSpeed(speed), batteryCapacity(capacity), timeToCharge(charge), energyPerMile(energy),
-              passengerCount(passengers), faultProbability(fault) {}
+        Vehicle(string comp, int speed, double capacity, double charge, double energy, int passengers, double fault)
+            : company(comp), cruise_speed(speed), battery_capacity(capacity), time_to_charge(charge), energy_per_mile(energy),
+            passenger_count(passengers), fault_probability(fault) {}
 };
 
 /* Simulate the flight */
@@ -68,7 +69,27 @@ int main() {
     Vehicle* Echo = new Vehicle("Echo", 30, 150, 0.3, 5.8, 2, 0.61);
     
     /* picking random 20 vehicles form the objects created above with equal picking probability */
-    
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<int> random_number(1, 5); // Generates random number from 1 to 5
+
+    /* Pick 20 random vehicles */
+    cout << "Randomly selecting 20 vehicles from the vehicle list: " << endl;
+    for (int i = 0; i < 20; i++) {
+        int choice = random_number(gen);
+        Vehicle* select_vehicle = nullptr;
+
+        switch (choice) {
+            case 1: select_vehicle = Alpha; break;
+            case 2: select_vehicle = Bravo; break;
+            case 3: select_vehicle = Charlie; break;
+            case 4: select_vehicle = Delta; break;
+            case 5: select_vehicle = Echo; break;
+        }
+
+        cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
+    }
+
     /* creating a vector to store the information of the 20 vehicles */
     
     /* try to simulate the flight till it reaches its capacity */
