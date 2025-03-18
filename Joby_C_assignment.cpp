@@ -36,7 +36,7 @@ then set its flight again. We will try to run this scenario for 3 hours.
 #include <mutex>
 #include <condition_variable>
 #include <unordered_map>
-#include <algorithm> 
+#include <algorithm>
 
 using namespace std;
 
@@ -45,9 +45,17 @@ double GLOBAL_TIME = 0.0;
 double GLOBAL_END_TIME = 3.0;
 int NUMBER_OF_VEHICLES = 20;
 double TIME_INCREMENT = 0.2;
+int CHARGING_STATION_PROVIDED = 3;
+
+/* vehicle count */
+int vehicle_alpha = 0;
+int vehicle_bravo = 0;
+int vehicle_chralie = 0;
+int vehicle_delta = 0;
+int vehicle_echo = 0;
+
 /* small tolerance value for floating-point comparison */
 const double EPSILON = 1e-6;
-int CHARGING_STATION_PROVIDED = 3;
 
 /* vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
@@ -61,7 +69,6 @@ class Vehicle {
         double fault_probability;
         double flight_timing = 0;
         double distance_traveled = 0;
-        double charging_time = 0;
         int faults = 0;
         double passenger_miles = 0;
         double start_charge_time = 0;
@@ -101,57 +108,49 @@ bool Vehicle::is_in_flight(double current_time) {
 /* charger class to manage charging stations */
 class Charger {
 private:
-    vector<Vehicle*> charging_station;
+    unordered_map<Vehicle*, Vehicle*> charging_station_map;  // Maps a vehicle's address to itself
 
 public:
     /* constructor */
-    Charger(int num_chargers) : charging_station(num_chargers, nullptr) {}
+    Charger(int num_chargers) {} // Empty constructor since we use unordered_map
 
     /* checks if any charging slot is free */
     bool is_charging_station_free() {
-        for (auto& slot : charging_station) {
-            if (slot == nullptr) {
-                return true;
-            }
-        }
-        return false;
+        return charging_station_map.size() < CHARGING_STATION_PROVIDED;
     }
 
     /* finds the first available charging slot */
     int get_free_charger_index() {
-        for (int i = 0; i < CHARGING_STATION_PROVIDED; i++) {
-            if (charging_station[i] == nullptr) {
-                return i;
-            }
-        }
-        return -1;
+        return charging_station_map.size() < CHARGING_STATION_PROVIDED ? charging_station_map.size() : -1;
     }
 
     /* assigns a vehicle to a free charging slot */
-    bool assign_vehicle_to_charger(Vehicle* vehicle) {
+    bool assign_vehicle_to_charger(Vehicle** vehicle) {
         int free_slot = get_free_charger_index();
         if (free_slot != -1) {
-            charging_station[free_slot] = vehicle;
-            cout << "Assigned " << vehicle->company << " to charging slot " << free_slot << endl;
-            vehicle->start_charge_time = GLOBAL_TIME;
+            charging_station_map[*vehicle] = *vehicle;  // Store the vehicle's memory address
+
+            // Print debug info to confirm unique address usage
+            cout << "Assigned " << (*vehicle)->company 
+                    << " (Address: " << *vehicle << ") to charging slot " << free_slot << endl;
+
+            (*vehicle)->start_charge_time = GLOBAL_TIME;
             return true;
         } else {
-            cout << "No free charging slots available for " << vehicle->company << endl;
+            cout << "No free charging slots available for " 
+                    << (*vehicle)->company << " (Address: " << *vehicle << ")" << endl;
             return false;
         }
-    }
+    }    
 
     /* releases a charger when charging is complete */
     void release_charger(Vehicle* vehicle) {
-        for (int i = 0; i < CHARGING_STATION_PROVIDED; i++) {
-            if (charging_station[i] == vehicle) {
-                charging_station[i] = nullptr;
-                cout << vehicle->company << " has finished charging and left slot " << i << endl;
-                return;
-            }
+        if (charging_station_map.find(vehicle) != charging_station_map.end()) {
+            charging_station_map.erase(vehicle);
+            cout << vehicle->company << " (Address: " << vehicle << ") has finished charging and left the station." << endl;
         }
     }
-};
+};    
 
 /* comparator to prioritize the vehicle with min-heap based on flight time to add the flight in queue accordingly */
 struct vehicle_landing_comparator {
@@ -189,11 +188,26 @@ int main() {
         Vehicle* select_vehicle = nullptr;
 
         switch (choice) {
-            case 1: select_vehicle = Alpha; break;
-            case 2: select_vehicle = Bravo; break;
-            case 3: select_vehicle = Charlie; break;
-            case 4: select_vehicle = Delta; break;
-            case 5: select_vehicle = Echo; break;
+            case 1: 
+                select_vehicle = new Vehicle("Alpha", 120, 320, 0.6, 1.6, 4, 0.25); 
+                vehicle_alpha++;
+                break;
+            case 2: 
+                select_vehicle = new Vehicle("Bravo", 100, 100, 0.2, 1.5, 5, 0.10); 
+                vehicle_bravo++;
+                break;
+            case 3: 
+                select_vehicle = new Vehicle("Charlie", 160, 220, 0.8, 2.2, 3, 0.05);
+                vehicle_chralie++;
+                break;
+            case 4: 
+                select_vehicle = new Vehicle("Delta", 90, 120, 0.62, 0.8, 2, 0.22); 
+                vehicle_delta++;
+                break;
+            case 5: 
+                select_vehicle = new Vehicle("Echo", 30, 150, 0.3, 5.8, 2, 0.61); 
+                vehicle_echo++;
+                break;
         }
 
         /* storing the selected vehicle in the vector */
@@ -202,53 +216,63 @@ int main() {
         cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
     }
     
+    /* ceating unorder_map for address references */
+    unordered_map<Vehicle*, Vehicle*> current_vehicle;
+
     /* running the simulation till the desired time period */
     while(GLOBAL_TIME <= GLOBAL_END_TIME + EPSILON){
         /* processes each vehicle */
-        for(int i = 0; i < NUMBER_OF_VEHICLES; i++){
-            Vehicle* current_vehicle = random_selected_vehicles[i];
+        for(int i = 0; i < NUMBER_OF_VEHICLES; i++) {
+            Vehicle* latest_vehicle = random_selected_vehicles[i];
+            if(current_vehicle.find(latest_vehicle) == current_vehicle.end()) {
+                current_vehicle[latest_vehicle] = latest_vehicle;
+            }            
             
             /* checks if the vehicle is still in the air */
-            if(GLOBAL_TIME <= current_vehicle->flight_timing){
-                cout << "Flight time left for vehicle " << current_vehicle->company << ": " << current_vehicle->flight_timing - GLOBAL_TIME << endl;
-            }
-            else{
+            if(GLOBAL_TIME <= current_vehicle[latest_vehicle]->flight_timing) {
+                cout << "Flight time left for vehicle " << current_vehicle[latest_vehicle]->company 
+                     << " at " << latest_vehicle << ": " 
+                     << current_vehicle[latest_vehicle]->flight_timing - GLOBAL_TIME << " hours." << endl;
+            } else {
                 /* adds vehicle to the charging queue when its flight is over */
-                if(find(charge_waiting_vehicles.begin(), charge_waiting_vehicles.end(), current_vehicle) == charge_waiting_vehicles.end()){
-                    charge_waiting_vehicles.push_back(current_vehicle);
-                    cout << current_vehicle->company << " has landed and waiting for charging." << endl;
+                if(find(charge_waiting_vehicles.begin(), charge_waiting_vehicles.end(), current_vehicle[latest_vehicle]) == charge_waiting_vehicles.end()) {
+                    charge_waiting_vehicles.push_back(current_vehicle[latest_vehicle]);
+                    cout << current_vehicle[latest_vehicle]->company << " at " << latest_vehicle << " has landed and is waiting for charging." << endl;
                 }
                 
                 /* if a charger is available, assign the vehicle to it */
-                if(charging_station.is_charging_station_free()){
-                    for(auto& vehicle : charge_waiting_vehicles){
-                        if(charging_station.assign_vehicle_to_charger(vehicle)){
-                            /* assuming charging time is fixed for simplicity */ 
-                            vehicle->charging_time = 2.0;
-                            break;
+                if(charging_station.is_charging_station_free()) {
+                    for(auto it = charge_waiting_vehicles.begin(); it != charge_waiting_vehicles.end(); ) {
+                        if(charging_station.assign_vehicle_to_charger(&(*it))) {
+                            it = charge_waiting_vehicles.erase(it); // Remove from queue once assigned
+                        } else {
+                            ++it;
                         }
                     }
-                }
-                else{
-                    cout << "No available chargers. Waiting in queue." << endl;
+                } else {
+                    cout << "No available chargers for "<< current_vehicle[latest_vehicle]->company 
+                         << " at " << latest_vehicle << ". Waiting in queue." << endl;
                 }
             }
         }
-    
+        
         /* after processing, handle charging completions */
-        for(auto& vehicle : charge_waiting_vehicles){
-            if((GLOBAL_TIME - vehicle->start_charge_time) >= vehicle->time_to_charge){
+        for(auto it = charge_waiting_vehicles.begin(); it != charge_waiting_vehicles.end(); ) {
+            Vehicle* vehicle = *it;
+            if((GLOBAL_TIME - vehicle->start_charge_time) >= vehicle->time_to_charge) {
                 charging_station.release_charger(vehicle);
                 /* adjusting flight timing after charging */
-                vehicle->flight_timing += GLOBAL_TIME; 
-                cout << vehicle->company << " completed charging and is ready for takeoff." << endl;
+                vehicle->flight_timing = GLOBAL_TIME + (vehicle->battery_capacity / (vehicle->energy_per_mile * vehicle->cruise_speed)); 
+                cout << vehicle->company << " at " << vehicle << " completed charging and is ready for takeoff." << endl;
+                it = charge_waiting_vehicles.erase(it); // Remove from queue after charging
+            } else {
+                cout << vehicle->company << " at " << vehicle << " is charging. Time left: " 
+                     << vehicle->time_to_charge - (GLOBAL_TIME - vehicle->start_charge_time) << " hours." << endl;
+                ++it;
             }
-            else{
-                cout << vehicle->company << " is charging. Time left: " << vehicle->time_to_charge - (GLOBAL_TIME - vehicle->start_charge_time) << " hours." << endl;
-            }
-        }
+        }        
     
-        /* updateingglobal time */ 
+        /* updating global time */ 
         cout << "Global time: " << GLOBAL_TIME << endl;
         GLOBAL_TIME += TIME_INCREMENT;
     }
