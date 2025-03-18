@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/17/25
-Time: 8:42 PM
+Time: 9:24 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -31,10 +31,13 @@ then set its flight again. We will try to run this scenario for 3 hours.
 #include <iostream>
 #include <random>
 #include <vector>
+#include <queue>
+#include <thread>
+#include <mutex>
 
 using namespace std;
 
-/* Vehicle class encapsulating eVTOL properties and statistics */
+/* vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
     public:
         string company;
@@ -58,7 +61,7 @@ class Vehicle {
         void simulate_flight();
 };
 
-/* Simulate the flight */
+/* simulate the flight */
 void Vehicle::simulate_flight() {
     flight_timing = battery_capacity / energy_per_mile;
     distance_traveled = flight_timing * cruise_speed;
@@ -70,12 +73,19 @@ void Vehicle::simulate_flight() {
     if (fault_chances(gen)) {
         faults++;
     }
-    cout << "Flight in air: "<< flight_timing <<", distance traveled: "<< distance_traveled << ", passenger_miles: " << passenger_miles << endl;
+    //cout << "Flight in air: "<< flight_timing <<", distance traveled: "<< distance_traveled << ", passenger_miles: " << passenger_miles << endl;
 }
 
-/* Charger class to manage charging stations */
+/* charger class to manage charging stations */
 class Charger {
 
+};
+
+/* comparator to prioritize the vehicle for charging that lands first for a min-heap based flight time*/
+struct vehicle_landing_comparator {
+    bool operator()(Vehicle* v1, Vehicle* v2) {
+        return v1->flight_timing > v2->flight_timing;
+    }
 };
 
 int main() {
@@ -94,7 +104,7 @@ int main() {
     /* creating a vector to store the information of the 20 vehicles */
     vector<Vehicle*> random_selected_vehicles;
 
-    /* Pick 20 random vehicles */
+    /* picking 20 random vehicles */
     cout << "Randomly selecting 20 vehicles from the vehicle list: " << endl;
     for (int i = 0; i < 20; i++) {
         int choice = random_number(gen);
@@ -108,18 +118,46 @@ int main() {
             case 5: select_vehicle = Echo; break;
         }
 
-        /* Store the selected vehicle in the vector */
+        /* storing the selected vehicle in the vector */
         random_selected_vehicles.push_back(select_vehicle);
 
         cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
     }
     
-    /* try to simulate the flight till it reaches its capacity */
-    for (auto& flight_simulate_vehicle : random_selected_vehicles) {
-        flight_simulate_vehicle->simulate_flight();
+    /* trying to simulate the flight using multi-threading so that all flights starts at the same time and the first to land will get the charging station */
+    vector<thread> flight_threads;
+
+    /* creating a priority queue so that shortest flight will get the charging station first */
+    priority_queue<Vehicle*, vector<Vehicle*>, vehicle_landing_comparator> landing_queue;
+
+    /* protect access to priority queue */
+    mutex queue_mutex; 
+
+    /* multi-threading to run the all the vehicles parallelly */
+    for (auto& vehicle : random_selected_vehicles) {
+        flight_threads.emplace_back([&]() {
+            vehicle->simulate_flight();
+            
+            /* lock queue while adding vehicle */
+            {
+                lock_guard<mutex> lock(queue_mutex);
+                landing_queue.push(vehicle);
+            }
+        });
     }
 
-    /* creating a vehicle chaging queue */
+    /* waiting for all flights to complete */
+    for (auto& t : flight_threads) {
+        t.join();
+    }
+
+    /* printing the queue */
+    cout << "landing logs" << endl;
+    while (!landing_queue.empty()) {
+        Vehicle* landed_vehicle = landing_queue.top();
+        landing_queue.pop();
+        cout << landed_vehicle->company << " landed first with flight time: " << landed_vehicle->flight_timing << "h\n";
+    }
     
     /* allocating the charging stations */
     
