@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/17/25
-Time: 8:20 PM
+Time: 8:42 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -30,6 +30,7 @@ then set its flight again. We will try to run this scenario for 3 hours.
 
 #include <iostream>
 #include <random>
+#include <vector>
 
 using namespace std;
 
@@ -73,6 +74,9 @@ int main() {
     mt19937 gen(rd());
     uniform_int_distribution<int> random_number(1, 5); // Generates random number from 1 to 5
 
+    /* creating a vector to store the information of the 20 vehicles */
+    vector<Vehicle*> random_selected_vehicles;
+
     /* Pick 20 random vehicles */
     cout << "Randomly selecting 20 vehicles from the vehicle list: " << endl;
     for (int i = 0; i < 20; i++) {
@@ -87,10 +91,11 @@ int main() {
             case 5: select_vehicle = Echo; break;
         }
 
+        /* Store the selected vehicle in the vector */
+        random_selected_vehicles.push_back(select_vehicle);
+
         cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
     }
-
-    /* creating a vector to store the information of the 20 vehicles */
     
     /* try to simulate the flight till it reaches its capacity */
     
