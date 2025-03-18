@@ -34,13 +34,6 @@ then set its flight again. We will try to run this scenario for 3 hours.
 
 using namespace std;
 
-/* global variables */
-double flight_timing = 0;
-double distance_traveled = 0;
-double charging_time = 0;
-int faults = 0;
-double passenger_miles = 0;
-
 /* Vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
     public:
@@ -51,6 +44,11 @@ class Vehicle {
         double energy_per_mile;
         int passenger_count;
         double fault_probability;
+        double flight_timing = 0;
+        double distance_traveled = 0;
+        double charging_time = 0;
+        int faults = 0;
+        double passenger_miles = 0;
         
         /* creating a constructor */
         Vehicle(string comp, int speed, double capacity, double charge, double energy, int passengers, double fault)
@@ -72,6 +70,7 @@ void Vehicle::simulate_flight() {
     if (fault_chances(gen)) {
         faults++;
     }
+    cout << "Flight in air: "<< flight_timing <<", distance traveled: "<< distance_traveled << ", passenger_miles: " << passenger_miles << endl;
 }
 
 /* Charger class to manage charging stations */
@@ -116,7 +115,9 @@ int main() {
     }
     
     /* try to simulate the flight till it reaches its capacity */
-    Alpha->simulate_flight();
+    for (auto& flight_simulate_vehicle : random_selected_vehicles) {
+        flight_simulate_vehicle->simulate_flight();
+    }
 
     /* creating a vehicle chaging queue */
     
