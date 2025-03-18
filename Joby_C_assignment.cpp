@@ -1,8 +1,8 @@
 /* 
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
-Date: 03/17/25
-Time: 10:33 PM
+Date: 03/18/25
+Time: 12:07 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -35,11 +35,19 @@ then set its flight again. We will try to run this scenario for 3 hours.
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <unordered_map>
+#include <algorithm> 
 
 using namespace std;
 
-/* global time variable */
+/* global variable */
 double GLOBAL_TIME = 0.0;
+double GLOBAL_END_TIME = 3.0;
+int NUMBER_OF_VEHICLES = 20;
+double TIME_INCREMENT = 0.2;
+/* small tolerance value for floating-point comparison */
+const double EPSILON = 1e-6;
+int CHARGING_STATION_PROVIDED = 3;
 
 /* vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
@@ -56,6 +64,7 @@ class Vehicle {
         double charging_time = 0;
         int faults = 0;
         double passenger_miles = 0;
+        double start_charge_time = 0;
         
         /* creating a constructor */
         Vehicle(string comp, int speed, double capacity, double charge, double energy, int passengers, double fault)
@@ -91,7 +100,57 @@ bool Vehicle::is_in_flight(double current_time) {
 
 /* charger class to manage charging stations */
 class Charger {
+private:
+    vector<Vehicle*> charging_station;
 
+public:
+    /* constructor */
+    Charger(int num_chargers) : charging_station(num_chargers, nullptr) {}
+
+    /* checks if any charging slot is free */
+    bool is_charging_station_free() {
+        for (auto& slot : charging_station) {
+            if (slot == nullptr) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /* finds the first available charging slot */
+    int get_free_charger_index() {
+        for (int i = 0; i < CHARGING_STATION_PROVIDED; i++) {
+            if (charging_station[i] == nullptr) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /* assigns a vehicle to a free charging slot */
+    bool assign_vehicle_to_charger(Vehicle* vehicle) {
+        int free_slot = get_free_charger_index();
+        if (free_slot != -1) {
+            charging_station[free_slot] = vehicle;
+            cout << "Assigned " << vehicle->company << " to charging slot " << free_slot << endl;
+            vehicle->start_charge_time = GLOBAL_TIME;
+            return true;
+        } else {
+            cout << "No free charging slots available for " << vehicle->company << endl;
+            return false;
+        }
+    }
+
+    /* releases a charger when charging is complete */
+    void release_charger(Vehicle* vehicle) {
+        for (int i = 0; i < CHARGING_STATION_PROVIDED; i++) {
+            if (charging_station[i] == vehicle) {
+                charging_station[i] = nullptr;
+                cout << vehicle->company << " has finished charging and left slot " << i << endl;
+                return;
+            }
+        }
+    }
 };
 
 /* comparator to prioritize the vehicle with min-heap based on flight time to add the flight in queue accordingly */
@@ -116,10 +175,16 @@ int main() {
 
     /* creating a vector to store the information of the 20 vehicles */
     vector<Vehicle*> random_selected_vehicles;
+    
+    /* creating a vector to store the information of the charging queue vehicles */
+    vector<Vehicle*> charge_waiting_vehicles;
+    
+    /* creating a charging station */
+    Charger charging_station(CHARGING_STATION_PROVIDED);
 
     /* picking 20 random vehicles */
     cout << "Randomly selecting 20 vehicles from the vehicle list: " << endl;
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < NUMBER_OF_VEHICLES; i++) {
         int choice = random_number(gen);
         Vehicle* select_vehicle = nullptr;
 
@@ -133,73 +198,61 @@ int main() {
 
         /* storing the selected vehicle in the vector */
         random_selected_vehicles.push_back(select_vehicle);
-
+        random_selected_vehicles[i]->simulate_flight();
         cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
     }
     
-    /* trying to simulate the flight using multi-threading so that all flights starts at the same time and the first to land will get the charging station */
-    vector<thread> flight_threads;
-
-    /* creating a priority queue so that shortest flight will get the charging station first */
-    priority_queue<Vehicle*, vector<Vehicle*>, vehicle_landing_comparator> landing_queue;
-
-    /* protect access to priority queue */
-    mutex queue_mutex;
-
-    /* protect access to global time */
-    mutex global_time_mutex;
-
-    /* multi-threading to run the all the vehicles parallelly */
-    for (auto& vehicle : random_selected_vehicles) {
-        flight_threads.emplace_back([&]() {
-            vehicle->simulate_flight();
+    /* running the simulation till the desired time period */
+    while(GLOBAL_TIME <= GLOBAL_END_TIME + EPSILON){
+        /* processes each vehicle */
+        for(int i = 0; i < NUMBER_OF_VEHICLES; i++){
+            Vehicle* current_vehicle = random_selected_vehicles[i];
             
-            /* lock queue while adding vehicle */
-            {
-                lock_guard<mutex> lock(queue_mutex);
-                landing_queue.push(vehicle);
+            /* checks if the vehicle is still in the air */
+            if(GLOBAL_TIME <= current_vehicle->flight_timing){
+                cout << "Flight time left for vehicle " << current_vehicle->company << ": " << current_vehicle->flight_timing - GLOBAL_TIME << endl;
             }
-        });
-    }
-
-    /* to update global time and vehicle status every 0.2 hours */
-    thread time_updater([&]() {
-        while (GLOBAL_TIME <= 3.0) {
-            this_thread::sleep_for(chrono::milliseconds(200)); // Update every 0.2 hours
-            lock_guard<mutex> lock(global_time_mutex);
-            GLOBAL_TIME += 0.2;
-
-            /* check and update vehicle statuses */
-            cout << "Global time: " << GLOBAL_TIME << " hours" << endl;
-            for (auto& vehicle : random_selected_vehicles) {
-                if (vehicle->is_in_flight(GLOBAL_TIME)) {
-                    cout << vehicle->company << " is still in flight with " 
-                         << vehicle->flight_timing - GLOBAL_TIME << " hours left." << endl;
+            else{
+                /* adds vehicle to the charging queue when its flight is over */
+                if(find(charge_waiting_vehicles.begin(), charge_waiting_vehicles.end(), current_vehicle) == charge_waiting_vehicles.end()){
+                    charge_waiting_vehicles.push_back(current_vehicle);
+                    cout << current_vehicle->company << " has landed and waiting for charging." << endl;
+                }
+                
+                /* if a charger is available, assign the vehicle to it */
+                if(charging_station.is_charging_station_free()){
+                    for(auto& vehicle : charge_waiting_vehicles){
+                        if(charging_station.assign_vehicle_to_charger(vehicle)){
+                            /* assuming charging time is fixed for simplicity */ 
+                            vehicle->charging_time = 2.0;
+                            break;
+                        }
+                    }
+                }
+                else{
+                    cout << "No available chargers. Waiting in queue." << endl;
                 }
             }
         }
-    });
-
-    /* waiting for all flights to complete */
-    for (auto& t : flight_threads) {
-        t.join();
+    
+        /* after processing, handle charging completions */
+        for(auto& vehicle : charge_waiting_vehicles){
+            if((GLOBAL_TIME - vehicle->start_charge_time) >= vehicle->time_to_charge){
+                charging_station.release_charger(vehicle);
+                /* adjusting flight timing after charging */
+                vehicle->flight_timing += GLOBAL_TIME; 
+                cout << vehicle->company << " completed charging and is ready for takeoff." << endl;
+            }
+            else{
+                cout << vehicle->company << " is charging. Time left: " << vehicle->time_to_charge - (GLOBAL_TIME - vehicle->start_charge_time) << " hours." << endl;
+            }
+        }
+    
+        /* updateingglobal time */ 
+        cout << "Global time: " << GLOBAL_TIME << endl;
+        GLOBAL_TIME += TIME_INCREMENT;
     }
 
-    /* wait for the time updater to complete */
-    time_updater.join();
-
-    /* printing the queue */
-    cout << "landing logs" << endl;
-    while (!landing_queue.empty()) {
-        Vehicle* landed_vehicle = landing_queue.top();
-        landing_queue.pop();
-        cout << landed_vehicle->company << " landed first with flight time: " << landed_vehicle->flight_timing << "h\n";
-    }
-    
-    /* allocating the charging stations */
-    
-    /* updating the global vehicle values */
-    
     /* printing the result */
 
     /* freeing the allocated memory */
