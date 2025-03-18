@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/17/25
-Time: 9:24 PM
+Time: 10:33 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -34,8 +34,12 @@ then set its flight again. We will try to run this scenario for 3 hours.
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 
 using namespace std;
+
+/* global time variable */
+double GLOBAL_TIME = 0.0;
 
 /* vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
@@ -58,12 +62,16 @@ class Vehicle {
             : company(comp), cruise_speed(speed), battery_capacity(capacity), time_to_charge(charge), energy_per_mile(energy),
             passenger_count(passengers), fault_probability(fault) {}
 
+        /* to simulate flight */
         void simulate_flight();
+
+        /* to know if the flight is still in air at the given time */
+        bool is_in_flight(double current_time);
 };
 
 /* simulate the flight */
 void Vehicle::simulate_flight() {
-    flight_timing = battery_capacity / energy_per_mile;
+    flight_timing = battery_capacity / (energy_per_mile * cruise_speed);
     distance_traveled = flight_timing * cruise_speed;
     passenger_miles = passenger_count * distance_traveled;
 
@@ -76,12 +84,17 @@ void Vehicle::simulate_flight() {
     //cout << "Flight in air: "<< flight_timing <<", distance traveled: "<< distance_traveled << ", passenger_miles: " << passenger_miles << endl;
 }
 
+/* to check if the vehicle is still in flight */
+bool Vehicle::is_in_flight(double current_time) {
+    return flight_timing > current_time;
+}
+
 /* charger class to manage charging stations */
 class Charger {
 
 };
 
-/* comparator to prioritize the vehicle for charging that lands first for a min-heap based flight time*/
+/* comparator to prioritize the vehicle with min-heap based on flight time to add the flight in queue accordingly */
 struct vehicle_landing_comparator {
     bool operator()(Vehicle* v1, Vehicle* v2) {
         return v1->flight_timing > v2->flight_timing;
@@ -99,7 +112,7 @@ int main() {
     /* picking random 20 vehicles form the objects created above with equal picking probability */
     random_device rd;
     mt19937 gen(rd());
-    uniform_int_distribution<int> random_number(1, 5); // Generates random number from 1 to 5
+    uniform_int_distribution<int> random_number(1, 5);
 
     /* creating a vector to store the information of the 20 vehicles */
     vector<Vehicle*> random_selected_vehicles;
@@ -131,7 +144,10 @@ int main() {
     priority_queue<Vehicle*, vector<Vehicle*>, vehicle_landing_comparator> landing_queue;
 
     /* protect access to priority queue */
-    mutex queue_mutex; 
+    mutex queue_mutex;
+
+    /* protect access to global time */
+    mutex global_time_mutex;
 
     /* multi-threading to run the all the vehicles parallelly */
     for (auto& vehicle : random_selected_vehicles) {
@@ -146,10 +162,31 @@ int main() {
         });
     }
 
+    /* to update global time and vehicle status every 0.2 hours */
+    thread time_updater([&]() {
+        while (GLOBAL_TIME <= 3.0) {
+            this_thread::sleep_for(chrono::milliseconds(200)); // Update every 0.2 hours
+            lock_guard<mutex> lock(global_time_mutex);
+            GLOBAL_TIME += 0.2;
+
+            /* check and update vehicle statuses */
+            cout << "Global time: " << GLOBAL_TIME << " hours" << endl;
+            for (auto& vehicle : random_selected_vehicles) {
+                if (vehicle->is_in_flight(GLOBAL_TIME)) {
+                    cout << vehicle->company << " is still in flight with " 
+                         << vehicle->flight_timing - GLOBAL_TIME << " hours left." << endl;
+                }
+            }
+        }
+    });
+
     /* waiting for all flights to complete */
     for (auto& t : flight_threads) {
         t.join();
     }
+
+    /* wait for the time updater to complete */
+    time_updater.join();
 
     /* printing the queue */
     cout << "landing logs" << endl;
