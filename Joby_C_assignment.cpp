@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/17/25
-Time: 12:02 AM
+Time: 7:56 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -34,7 +34,19 @@ using namespace std;
 
 /* Vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
-    
+    public:
+        string company;
+        double cruiseSpeed;
+        double batteryCapacity;
+        double timeToCharge;
+        double energyPerMile;
+        int passengerCount;
+        double faultProbability;
+        
+        /* creating a constructor */
+        Vehicle(string comp, double speed, double capacity, double charge, double energy, int passengers, double fault)
+            : company(comp), cruiseSpeed(speed), batteryCapacity(capacity), timeToCharge(charge), energyPerMile(energy),
+              passengerCount(passengers), faultProbability(fault) {}
 };
 
 /* Simulate the flight */
@@ -49,6 +61,11 @@ class Charger {
 
 int main() {
     /* creating 5 objects of vehicles */
+    Vehicle* Alpha = new Vehicle("Alpha", 120, 320, 0.6, 1.6, 4, 0.25);
+    Vehicle* Bravo = new Vehicle("Bravo", 100, 100, 0.2, 1.5, 5, 0.10);
+    Vehicle* Charlie = new Vehicle("Charlie", 160, 220, 0.8, 2.2, 3, 0.05);
+    Vehicle* Delta = new Vehicle("Delta", 90, 120, 0.62, 0.8, 2, 0.22);
+    Vehicle* Echo = new Vehicle("Echo", 30, 150, 0.3, 5.8, 2, 0.61);
     
     /* picking random 20 vehicles form the objects created above with equal picking probability */
     
@@ -63,6 +80,13 @@ int main() {
     /* updating the global vehicle values */
     
     /* printing the result */
+
+    /* freeing the allocated memory */
+    delete Alpha;
+    delete Bravo;
+    delete Charlie;
+    delete Delta;
+    delete Echo;
     
     return 0;
 }
