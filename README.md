@@ -112,8 +112,8 @@ Total Passenger Miles: 103.448 miles
 ## How to Run
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/eVTOL-Simulation.git
-   cd eVTOL-Simulation
+   git clone https://github.com/ShivamShah1/joby_aviation_c_assignment/tree/main
+   cd joby_aviation_c_assignment
    ```
 2. Compile the program:
    ```bash
@@ -121,7 +121,7 @@ Total Passenger Miles: 103.448 miles
    ```
 3. Run the simulation:
    ```bash
-   ./eVTOL_Simulation
+   ./Joby_C_assignment
    ```
 
 ## Author
