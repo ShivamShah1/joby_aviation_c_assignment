@@ -2,7 +2,7 @@
 Author: Shivam Shah
 Reason: Joby Aviation C assignment
 Date: 03/18/25
-Time: 2:57 PM
+Time: 5:08 PM
 
 To perform an eVTOL Simulation Problem
 
@@ -31,10 +31,6 @@ then set its flight again. We will try to run this scenario for 3 hours.
 #include <iostream>
 #include <random>
 #include <vector>
-#include <queue>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 #include <unordered_map>
 #include <algorithm>
 
@@ -57,6 +53,27 @@ int vehicle_echo = 0;
 /* small tolerance value for floating-point comparison */
 const double EPSILON = 1e-6;
 
+/* Structure to store statistics */
+struct Statistics {
+    int count = 0;
+    double total_flight_time = 0;
+    double total_distance_traveled = 0;
+    double total_charging_time = 0;
+    int total_faults = 0;
+    double total_passenger_miles = 0;
+
+    /* Compute and display averages */
+    void display_average_stats(const string& vehicle_type) {
+        if (count == 0) return; // Avoid division by zero
+        cout << "\nStatistics for " << vehicle_type << ":\n";
+        cout << "Avg. Flight Time per Flight: " << (total_flight_time / count) << " hours\n";
+        cout << "Avg. Distance Traveled per Flight: " << (total_distance_traveled / count) << " miles\n";
+        cout << "Avg. Charging Time per Session: " << (total_charging_time / count) << " hours\n";
+        cout << "Total Faults: " << total_faults << "\n";
+        cout << "Total Passenger Miles: " << total_passenger_miles << " miles\n";
+    }
+};
+
 /* vehicle class encapsulating eVTOL properties and statistics */
 class Vehicle {
     public:
@@ -75,6 +92,7 @@ class Vehicle {
         bool in_charging_station = false;
         bool waiting_in_charging_waiting_queue = false;
         double landed_from_flight = 0;
+        int number_of_charge = 0;
         
         /* creating a constructor */
         Vehicle(string comp, int speed, double capacity, double charge, double energy, int passengers, double fault)
@@ -83,9 +101,6 @@ class Vehicle {
 
         /* to simulate flight */
         void simulate_flight();
-
-        /* to know if the flight is still in air at the given time */
-        bool is_in_flight(double current_time);
 };
 
 /* simulate the flight */
@@ -101,11 +116,6 @@ void Vehicle::simulate_flight() {
         faults++;
     }
     //cout << "Flight in air: "<< flight_timing <<", distance traveled: "<< distance_traveled << ", passenger_miles: " << passenger_miles << endl;
-}
-
-/* to check if the vehicle is still in flight */
-bool Vehicle::is_in_flight(double current_time) {
-    return flight_timing > current_time;
 }
 
 /* charger class to manage charging stations */
@@ -149,11 +159,11 @@ public:
             else{
                 (*vehicle)->start_charge_time = GLOBAL_TIME;
             }
-            cout << "Assigned " << (*vehicle)->company << " (Address: " << *vehicle << ") to charging slot " << free_slot << " at time: " << (*vehicle)->start_charge_time << " and need time: "<<(*vehicle)->time_to_charge << endl;
+            //cout << "Assigned " << (*vehicle)->company << " (Address: " << *vehicle << ") to charging slot " << free_slot << " at time: " << (*vehicle)->start_charge_time << " and need time: "<<(*vehicle)->time_to_charge << endl;
 
             return true;
         } else {
-            cout << "No free charging slots available for " << (*vehicle)->company << " (Address: " << *vehicle << ")" << endl;
+            //cout << "No free charging slots available for " << (*vehicle)->company << " (Address: " << *vehicle << ")" << endl;
             return false;
         }
     }    
@@ -163,17 +173,21 @@ public:
         vehicles_released++;
         if (charging_station_map.find(*vehicle) != charging_station_map.end()) {
             (*vehicle)->in_charging_station = false;
+            (*vehicle)->number_of_charge++;
             if(vehicles_released>3){
                 (*vehicle)->flight_timing += GLOBAL_TIME - TIME_INCREMENT + EPSILON;
             }
             else{
                 (*vehicle)->flight_timing += GLOBAL_TIME;
             }
-            cout << (*vehicle)->company << " (Address: " << vehicle << ") has finished charging and left the station and fly till: "<< (*vehicle)->flight_timing << endl;
+            //cout << (*vehicle)->company << " (Address: " << vehicle << ") has finished charging and left the station and fly till: "<< (*vehicle)->flight_timing << endl;
             charging_station_map.erase(*vehicle);
         }
     }    
 };
+
+/* Map to store statistics for each vehicle type */
+unordered_map<string, Statistics> vehicle_stats;
 
 int main() {
     /* creating 5 objects of vehicles */
@@ -234,11 +248,12 @@ int main() {
         random_selected_vehicles[i]->simulate_flight();
         cout << "Pick " << i + 1 << ": " << select_vehicle->company << endl;
     } 
-
+    /* sorting the random vector */
+    sort(random_selected_vehicles.begin(), random_selected_vehicles.end());
 
     /* running the simulation till the desired time period */
     while(GLOBAL_TIME <= GLOBAL_END_TIME + EPSILON){
-        cout << "Global time: " << GLOBAL_TIME << endl;
+        //cout << "Global time: " << GLOBAL_TIME << endl;
 
         /* processes each vehicle */
         for(int i = 0; i < NUMBER_OF_VEHICLES; i++) {
@@ -246,22 +261,22 @@ int main() {
             if(current_vehicle.find(latest_vehicle) == current_vehicle.end()) {
                 current_vehicle[latest_vehicle] = latest_vehicle;
             }            
-            cout<< "checking flight time for flight "<< i<< " "<< current_vehicle[latest_vehicle]->company<< " at "<< latest_vehicle << ": "<< current_vehicle[latest_vehicle]->flight_timing<<endl;
+            //cout<< "checking flight time for flight "<< i<< " "<< current_vehicle[latest_vehicle]->company<< " at "<< latest_vehicle << ": "<< current_vehicle[latest_vehicle]->flight_timing<<endl;
             /* checks if the vehicle is still in the air */
             if(GLOBAL_TIME <= current_vehicle[latest_vehicle]->flight_timing) {
-                cout << "Flight " << i << " time in air left for " << current_vehicle[latest_vehicle]->company << " at " << latest_vehicle << ": " << current_vehicle[latest_vehicle]->flight_timing - GLOBAL_TIME << " hours." << endl;
+                //cout << "Flight " << i << " time in air left for " << current_vehicle[latest_vehicle]->company << " at " << latest_vehicle << ": " << current_vehicle[latest_vehicle]->flight_timing - GLOBAL_TIME << " hours." << endl;
             }
             else {
                 /* ensure the vehicle enters the queue only once */
                 if (!in_charging_queue[current_vehicle[latest_vehicle]]) {
                     in_charging_queue[current_vehicle[latest_vehicle]] = latest_vehicle;
-                    cout << "Flight "<< i << " "<< (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << " has landed and is waiting for charging." << endl;
+                    //cout << "Flight "<< i << " "<< (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << " has landed and is waiting for charging." << endl;
                     (in_charging_queue[current_vehicle[latest_vehicle]])->waiting_in_charging_waiting_queue = true;
                 }
 
                 if((in_charging_queue[current_vehicle[latest_vehicle]])->in_charging_station == true){
                     if((GLOBAL_TIME - (in_charging_queue[current_vehicle[latest_vehicle]])->flight_timing) >= (in_charging_queue[current_vehicle[latest_vehicle]])->time_to_charge){
-                        cout<<"Flight "<< i << " ";
+                        //cout<<"Flight "<< i << " ";
                         charging_station.release_charger(&in_charging_queue[current_vehicle[latest_vehicle]]);
                         (in_charging_queue[current_vehicle[latest_vehicle]])->in_charging_station = false;
                         (in_charging_queue[current_vehicle[latest_vehicle]])->waiting_in_charging_waiting_queue = false;
@@ -271,7 +286,7 @@ int main() {
                         }
                     }
                     else{
-                        cout << "Flight "<< i << " " << (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << " is still in charging with time left: "<< (in_charging_queue[current_vehicle[latest_vehicle]])->time_to_charge - GLOBAL_TIME + (in_charging_queue[current_vehicle[latest_vehicle]])->start_charge_time << "h" << endl;
+                        //cout << "Flight "<< i << " " << (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << " is still in charging with time left: "<< (in_charging_queue[current_vehicle[latest_vehicle]])->time_to_charge - GLOBAL_TIME + (in_charging_queue[current_vehicle[latest_vehicle]])->start_charge_time << "h" << endl;
                         if (in_charging_queue.find(current_vehicle[latest_vehicle]) != in_charging_queue.end()) {
                             in_charging_queue.erase(current_vehicle[latest_vehicle]);
                         }
@@ -284,7 +299,7 @@ int main() {
                     (in_charging_queue[current_vehicle[latest_vehicle]])->waiting_in_charging_waiting_queue = false;
                 }               
                 else {
-                    cout << "No available chargers for flight "<< i << " "<< (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << ". Waiting in queue." << endl;
+                    //cout << "No available chargers for flight "<< i << " "<< (in_charging_queue[current_vehicle[latest_vehicle]])->company << " at " << in_charging_queue[current_vehicle[latest_vehicle]] << ". Waiting in queue." << endl;
                 }
             }
         }
@@ -297,13 +312,30 @@ int main() {
                 first_entry = in_charging_queue.erase(first_entry);
             }
         }
-        
+
         /* updating global time */ 
-        cout << "Global time: " << GLOBAL_TIME << endl;
+        //cout << "Global time: " << GLOBAL_TIME << endl;
         GLOBAL_TIME += TIME_INCREMENT;
     }
 
-    /* printing the result */
+    for (Vehicle* vehicle : random_selected_vehicles) {
+        Statistics& stats = vehicle_stats[vehicle->company];
+        stats.count++;
+        stats.total_flight_time += vehicle->flight_timing;
+        stats.total_distance_traveled += vehicle->distance_traveled;
+        stats.total_faults += vehicle->faults;
+        stats.total_passenger_miles += vehicle->passenger_miles;
+        stats.total_charging_time += vehicle->number_of_charge * vehicle->time_to_charge;
+    }
+
+    /* Displaying final statistics */
+    cout << "\n==============================";
+    cout << "\n Final Vehicle Statistics";
+    cout << "\n==============================\n";
+
+    for (auto it = vehicle_stats.begin(); it != vehicle_stats.end(); ++it) {
+        it->second.display_average_stats(it->first);
+    }
 
     /* freeing the allocated memory */
     delete Alpha;
